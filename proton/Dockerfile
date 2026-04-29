@@ -4,6 +4,8 @@ ARG PROTON_VERSION
 
 ENV PROTON_VERSION=${PROTON_VERSION}
 
+COPY ./rootfs/ /
+
 RUN dpkg --add-architecture i386 \
     && apt update \
     && apt install --no-install-recommends -y \
@@ -34,8 +36,7 @@ RUN dpkg --add-architecture i386 \
     && ln -s /root/.steam/sdk64/steamclient.so /root/.steam/sdk64/steamservice.so \
     && ln -s /steamcmd/linux32 /root/.steam/sdk32 \
     && ln -s /root/.steam/sdk32/steamclient.so /root/.steam/sdk32/steamservice.so \
-    && curl -sqL "https://github.com/GloriousEggroll/proton-ge-custom/releases/download/GE-Proton${PROTON_VERSION}/GE-Proton${PROTON_VERSION}.tar.gz" | tar zxvf - -C "/steamcmd/compatibilitytools.d/"
-
-COPY ./rootfs/ /
+    && curl -sqL "https://github.com/GloriousEggroll/proton-ge-custom/releases/download/GE-Proton${PROTON_VERSION}/GE-Proton${PROTON_VERSION}.tar.gz" | tar zxvf - -C "/steamcmd/compatibilitytools.d/" \
+    && chmod +x /entrypoint.sh
 
 ENTRYPOINT [ "/entrypoint.sh" ]
