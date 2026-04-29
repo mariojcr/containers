@@ -20,17 +20,6 @@ export STEAM_COMPAT_CLIENT_INSTALL_PATH="/steamcmd"
 export STEAM_COMPAT_DATA_PATH="/steamcmd/steamapps/compatdata/${APP_ID}"
 mkdir -p "${STEAM_COMPAT_DATA_PATH}"
 
-# Do NOT remove the appmanifest: if it exists (previous install), 'app_update'
-# uses it to incrementally revalidate. Removing it forces SteamCMD to attempt a
-# clean install, which then fails with "Missing configuration" because
-# +app_license_request anonymous does not bring back the package cache needed
-# for a first install after a container restart.
-
-# +app_license_request forces SteamCMD to refresh the app license/configuration
-# before the update. This avoids the recurring "ERROR! Failed to install app
-# 'XXX' (Missing configuration)" failure observed with several anonymous-eligible
-# dedicated server apps (e.g. Conan Exiles - 443030) whose package metadata is
-# not picked up correctly by a fresh SteamCMD client.
 /steamcmd/steamcmd.sh \
   +@sSteamCmdForcePlatformType windows \
   +force_install_dir /game \
@@ -40,6 +29,9 @@ mkdir -p "${STEAM_COMPAT_DATA_PATH}"
   +quit
 
 if [ "${BACKGROUND_PROCESS}" = "true" ]; then
+  if [ "${XVFB_NEEDED}" = "true" ]; then
+    /etc/init.d/xvfb start
+  fi
   /steamcmd/compatibilitytools.d/GE-Proton"${PROTON_VERSION}"/proton run "${EXE_PATH}" &
   if [ -n "${READ_LOGS_FILE}" ] && [ -f "${READ_LOGS_FILE}" ]; then
     exec tail -f "${READ_LOGS_FILE}"
