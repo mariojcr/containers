@@ -22,10 +22,16 @@ mkdir -p "${STEAM_COMPAT_DATA_PATH}"
 
 rm -f /game/steamapps/appmanifest_"${APP_ID}".acf
 
+# +app_license_request forces SteamCMD to refresh the app license/configuration
+# before the update. This avoids the recurring "ERROR! Failed to install app
+# 'XXX' (Missing configuration)" failure observed with several anonymous-eligible
+# dedicated server apps (e.g. Conan Exiles - 443030) whose package metadata is
+# not picked up correctly by a fresh SteamCMD client.
 /steamcmd/steamcmd.sh \
   +@sSteamCmdForcePlatformType windows \
   +force_install_dir /game \
   +login anonymous \
+  +app_license_request "${APP_ID}" \
   +app_update "${APP_ID}" validate \
   +quit
 
