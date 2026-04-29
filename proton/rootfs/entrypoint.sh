@@ -20,7 +20,11 @@ export STEAM_COMPAT_CLIENT_INSTALL_PATH="/steamcmd"
 export STEAM_COMPAT_DATA_PATH="/steamcmd/steamapps/compatdata/${APP_ID}"
 mkdir -p "${STEAM_COMPAT_DATA_PATH}"
 
-rm -f /game/steamapps/appmanifest_"${APP_ID}".acf
+# Do NOT remove the appmanifest: if it exists (previous install), 'app_update'
+# uses it to incrementally revalidate. Removing it forces SteamCMD to attempt a
+# clean install, which then fails with "Missing configuration" because
+# +app_license_request anonymous does not bring back the package cache needed
+# for a first install after a container restart.
 
 # +app_license_request forces SteamCMD to refresh the app license/configuration
 # before the update. This avoids the recurring "ERROR! Failed to install app
