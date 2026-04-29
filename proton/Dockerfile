@@ -18,6 +18,7 @@ RUN dpkg --add-architecture i386 \
         jq \
         locales \
         xvfb \
+        xauth \
         lib32gcc-s1 \
         python3 \
     && echo 'LANG="en_US.UTF-8"' > /etc/default/locale \
