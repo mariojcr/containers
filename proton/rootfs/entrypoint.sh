@@ -30,14 +30,19 @@ mkdir -p "${STEAM_COMPAT_DATA_PATH}"
 
 if [ "${BACKGROUND_PROCESS}" = "true" ]; then
   if [ "${XVFB_NEEDED}" = "true" ]; then
-    /etc/init.d/xvfb start
+    xvfb-run --auto-servernum /steamcmd/compatibilitytools.d/GE-Proton"${PROTON_VERSION}"/proton run "${EXE_PATH}" &
+  else
+    /steamcmd/compatibilitytools.d/GE-Proton"${PROTON_VERSION}"/proton run "${EXE_PATH}" &
   fi
-  /steamcmd/compatibilitytools.d/GE-Proton"${PROTON_VERSION}"/proton run "${EXE_PATH}" &
   if [ -n "${READ_LOGS_FILE}" ] && [ -f "${READ_LOGS_FILE}" ]; then
     exec tail -f "${READ_LOGS_FILE}"
   else
     tail -f /dev/null
   fi
 else
-  /steamcmd/compatibilitytools.d/GE-Proton"${PROTON_VERSION}"/proton run "${EXE_PATH}"
+  if [ "${XVFB_NEEDED}" = "true" ]; then
+    exec xvfb-run --auto-servernum /steamcmd/compatibilitytools.d/GE-Proton"${PROTON_VERSION}"/proton run "${EXE_PATH}"
+  else
+    exec /steamcmd/compatibilitytools.d/GE-Proton"${PROTON_VERSION}"/proton run "${EXE_PATH}"
+  fi
 fi
