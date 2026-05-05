@@ -1,4 +1,4 @@
-FROM ghcr.io/elmariovi/debian:trixie-slim
+FROM debian:13-slim
 
 ARG UID=1000
 
