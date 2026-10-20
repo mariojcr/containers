@@ -1,7 +1,7 @@
-# GE-Proton sobre Debian para servidores dedicados de Steam. La versión de
-# GE-Proton es a la vez el build-arg y el tag de la imagen, y la actualiza
-# Renovate (ver renovate.json5), así que el workflow entra también cuando
-# cambia este fichero, no solo proton/.
+# GE-Proton sobre Debian para servidores dedicados de Steam. La versión vive
+# en el ARG del Dockerfile (ahí la actualiza Renovate, que no puede escribir
+# en ficheros de .github/workflows/ con el token de Actions) y de ahí sale
+# también el tag de la imagen.
 #
 # Publica dos tags: la versión (:11-7), que se reescribe en cada build, y
 # :11-7-<sha corto>, que no se mueve nunca — es la que conviene fijar en un
@@ -20,7 +20,6 @@ on:
 env:
   APP: proton
   REGISTRY: ghcr.io/mariojcr
-  PROTON_VERSION: "11-7"
 jobs:
   build:
     name: Build Proton
@@ -30,9 +29,14 @@ jobs:
       packages: write
     steps:
       - uses: actions/checkout@v5
-      - name: Short sha
+      - name: Version and sha
         id: meta
-        run: echo "sha=$(git rev-parse --short=7 HEAD)" >> "$GITHUB_OUTPUT"
+        run: |
+          set -euo pipefail
+          version=$(sed -n 's/^ARG PROTON_VERSION=//p' proton/Dockerfile)
+          [ -n "$version" ] || { echo "::error::no PROTON_VERSION in proton/Dockerfile"; exit 1; }
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          echo "sha=$(git rev-parse --short=7 HEAD)" >> "$GITHUB_OUTPUT"
       - uses: docker/login-action@v3
         if: github.event_name != 'pull_request'
         with:
@@ -45,10 +49,10 @@ jobs:
           # en una PR solo se comprueba que construye
           push: ${{ github.event_name != 'pull_request' }}
           build-args: |
-            PROTON_VERSION=${{ env.PROTON_VERSION }}
+            PROTON_VERSION=${{ steps.meta.outputs.version }}
           tags: |
-            ${{ env.REGISTRY }}/${{ env.APP }}:${{ env.PROTON_VERSION }}
-            ${{ env.REGISTRY }}/${{ env.APP }}:${{ env.PROTON_VERSION }}-${{ steps.meta.outputs.sha }}
+            ${{ env.REGISTRY }}/${{ env.APP }}:${{ steps.meta.outputs.version }}
+            ${{ env.REGISTRY }}/${{ env.APP }}:${{ steps.meta.outputs.version }}-${{ steps.meta.outputs.sha }}
         env:
           DOCKER_BUILD_SUMMARY: false
       - name: Scan for vulnerabilities
@@ -56,7 +60,7 @@ jobs:
         if: github.event_name != 'pull_request'
         uses: crazy-max/ghaction-container-scan@v3
         with:
-          image: ${{ env.REGISTRY }}/${{ env.APP }}:${{ env.PROTON_VERSION }}
+          image: ${{ env.REGISTRY }}/${{ env.APP }}:${{ steps.meta.outputs.version }}
           annotations: true
           dockerfile: ./${{ env.APP }}/Dockerfile
       - name: Clean up untagged images

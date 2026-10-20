@@ -16,11 +16,12 @@
       extractVersionTemplate: "^DepotDownloader_(?<version>.+)$",
     },
     {
-      // GE-Proton: la versión vive en el workflow, que es quien la pasa como
-      // build-arg y la usa de tag de la imagen
+      // GE-Proton: el ARG del Dockerfile, que es de donde el workflow saca el
+      // tag. En un fichero de .github/workflows/ no valdría: el GITHUB_TOKEN
+      // de Actions no puede escribir ahí y la PR nunca llegaría a crearse.
       customType: "regex",
-      managerFilePatterns: ["/^\\.github/workflows/proton\\.yml$/"],
-      matchStrings: ["PROTON_VERSION:\\s*\"(?<currentValue>[0-9-]+)\""],
+      managerFilePatterns: ["/(^|/)Dockerfile$/"],
+      matchStrings: ["ARG PROTON_VERSION=(?<currentValue>[0-9-]+)"],
       depNameTemplate: "GloriousEggroll/proton-ge-custom",
       datasourceTemplate: "github-releases",
       // las releases se etiquetan GE-Proton11-7: ni semver ni nada parecido,

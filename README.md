@@ -26,10 +26,16 @@ cada versión nueva de:
   un `postUpgradeTask` ejecuta `scripts/pin-depotdownloader.sh`, que baja el
   zip nuevo y reescribe su `sha256` en el Dockerfile. Si eso no corriera, la
   build falla al comprobar el hash, que es el fallo correcto;
-- **GE-Proton**, cuya versión vive en el workflow porque es a la vez
-  build-arg y tag. Sus releases se llaman `GE-Proton11-7`, así que el orden
-  se define con un `versioning` propio en `renovate.json5`.
+- **GE-Proton**, cuya versión es el `ARG PROTON_VERSION` del Dockerfile de
+  proton, de donde el workflow saca también el tag de la imagen. Sus releases
+  se llaman `GE-Proton11-7`, así que el orden se define con un `versioning`
+  propio en `renovate.json5`.
 
-Renovate usa el `GITHUB_TOKEN` por defecto, y las PR que abre así **no**
-disparan la build (protección de GitHub contra bucles). Para que cada subida
-se valide construyendo, hay que poner un PAT en el secret `RENOVATE_TOKEN`.
+Dos cosas que el `GITHUB_TOKEN` de Actions no puede hacer, y por las que
+conviene poner un PAT en el secret `RENOVATE_TOKEN`:
+
+- **escribir en `.github/workflows/`**, así que las subidas de versión de las
+  propias actions se quedan listadas en el panel de dependencias sin PR (por
+  eso las versiones de las imágenes viven en los Dockerfile, no aquí);
+- **disparar otros workflows**: las PR que abre con el token por defecto no
+  lanzan la build, así que la subida no se valida construyendo.
