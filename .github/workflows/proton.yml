@@ -1,0 +1,69 @@
+# GE-Proton sobre Debian para servidores dedicados de Steam. La versión de
+# GE-Proton es a la vez el build-arg y el tag de la imagen, y la actualiza
+# Renovate (ver renovate.json5), así que el workflow entra también cuando
+# cambia este fichero, no solo proton/.
+#
+# Publica dos tags: la versión (:11-7), que se reescribe en cada build, y
+# :11-7-<sha corto>, que no se mueve nunca — es la que conviene fijar en un
+# job para saber exactamente qué está corriendo.
+name: Proton CI
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - "proton/**"
+      - ".github/workflows/proton.yml"
+  pull_request:
+    paths:
+      - "proton/**"
+      - ".github/workflows/proton.yml"
+env:
+  APP: proton
+  REGISTRY: ghcr.io/mariojcr
+  PROTON_VERSION: "11-7"
+jobs:
+  build:
+    name: Build Proton
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@v5
+      - name: Short sha
+        id: meta
+        run: echo "sha=$(git rev-parse --short=7 HEAD)" >> "$GITHUB_OUTPUT"
+      - uses: docker/login-action@v3
+        if: github.event_name != 'pull_request'
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - uses: docker/build-push-action@v6
+        with:
+          context: ./${{ env.APP }}/
+          # en una PR solo se comprueba que construye
+          push: ${{ github.event_name != 'pull_request' }}
+          build-args: |
+            PROTON_VERSION=${{ env.PROTON_VERSION }}
+          tags: |
+            ${{ env.REGISTRY }}/${{ env.APP }}:${{ env.PROTON_VERSION }}
+            ${{ env.REGISTRY }}/${{ env.APP }}:${{ env.PROTON_VERSION }}-${{ steps.meta.outputs.sha }}
+        env:
+          DOCKER_BUILD_SUMMARY: false
+      - name: Scan for vulnerabilities
+        id: scan
+        if: github.event_name != 'pull_request'
+        uses: crazy-max/ghaction-container-scan@v3
+        with:
+          image: ${{ env.REGISTRY }}/${{ env.APP }}:${{ env.PROTON_VERSION }}
+          annotations: true
+          dockerfile: ./${{ env.APP }}/Dockerfile
+      - name: Clean up untagged images
+        if: github.event_name != 'pull_request'
+        uses: actions/delete-package-versions@v5
+        with:
+          package-name: ${{ env.APP }}
+          package-type: container
+          delete-only-untagged-versions: true
+          token: ${{ secrets.GITHUB_TOKEN }}

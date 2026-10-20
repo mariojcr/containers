@@ -1,0 +1,47 @@
+# Detecta versiones nuevas de lo que fijan las imágenes (DepotDownloader,
+# GE-Proton, imágenes base y actions) y abre una PR por cada una. La
+# configuración está en renovate.json5; esto solo es el runner.
+#
+# Con el GITHUB_TOKEN por defecto, las PR que abre Renovate NO disparan otros
+# workflows (protección de GitHub contra bucles), así que la build no valida la
+# subida. Para que sí lo haga, se pone un PAT de usuario o de app en el secret
+# RENOVATE_TOKEN (contents y pull-requests de escritura sobre este repo).
+name: renovate
+
+on:
+  schedule:
+    # lunes a las 05:17 UTC, antes de ponerse a trastear
+    - cron: "17 5 * * 1"
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - renovate.json5
+      - .github/workflows/renovate.yml
+      - scripts/pin-depotdownloader.sh
+
+permissions:
+  contents: write
+  pull-requests: write
+  issues: write
+
+concurrency:
+  group: renovate
+  cancel-in-progress: false
+
+jobs:
+  renovate:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: renovatebot/github-action@a63d9a7bc606f7336fd20b47f2f32259a35e6213 # v46.3.9
+        with:
+          token: ${{ secrets.RENOVATE_TOKEN || secrets.GITHUB_TOKEN }}
+        env:
+          RENOVATE_REPOSITORIES: ${{ github.repository }}
+          RENOVATE_PLATFORM: github
+          # los postUpgradeTasks están bloqueados salvo lo que liste esto
+          RENOVATE_ALLOWED_COMMANDS: '["^\\./scripts/pin-depotdownloader\\.sh "]'
+          LOG_LEVEL: info

@@ -1,0 +1,62 @@
+# Sidecar de red para tareas de Nomad. Publica :<versión> (se reescribe) y
+# :<versión>-<sha corto>, que no se mueve: esa es la que conviene fijar en un
+# job. La versión se sube a mano aquí cuando cambia el contrato del sidecar.
+name: Net Nomad CI
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - "net-nomad/**"
+      - ".github/workflows/net-nomad.yaml"
+  pull_request:
+    paths:
+      - "net-nomad/**"
+      - ".github/workflows/net-nomad.yaml"
+env:
+  APP: net-nomad
+  REGISTRY: ghcr.io/mariojcr
+  VERSION: "1.0.0"
+jobs:
+  build:
+    name: Build Net Nomad
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@v5
+      - name: Short sha
+        id: meta
+        run: echo "sha=$(git rev-parse --short=7 HEAD)" >> "$GITHUB_OUTPUT"
+      - uses: docker/login-action@v3
+        if: github.event_name != 'pull_request'
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - uses: docker/build-push-action@v6
+        with:
+          context: ./${{ env.APP }}/
+          # en una PR solo se comprueba que construye
+          push: ${{ github.event_name != 'pull_request' }}
+          tags: |
+            ${{ env.REGISTRY }}/${{ env.APP }}:${{ env.VERSION }}
+            ${{ env.REGISTRY }}/${{ env.APP }}:${{ env.VERSION }}-${{ steps.meta.outputs.sha }}
+        env:
+          DOCKER_BUILD_SUMMARY: false
+      - name: Scan for vulnerabilities
+        id: scan
+        if: github.event_name != 'pull_request'
+        uses: crazy-max/ghaction-container-scan@v3
+        with:
+          image: ${{ env.REGISTRY }}/${{ env.APP }}:${{ env.VERSION }}
+          annotations: true
+          dockerfile: ./${{ env.APP }}/Dockerfile
+      - name: Clean up untagged images
+        if: github.event_name != 'pull_request'
+        uses: actions/delete-package-versions@v5
+        with:
+          package-name: ${{ env.APP }}
+          package-type: container
+          delete-only-untagged-versions: true
+          token: ${{ secrets.GITHUB_TOKEN }}

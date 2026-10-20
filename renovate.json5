@@ -1,0 +1,48 @@
+{
+  $schema: "https://docs.renovatebot.com/renovate-schema.json",
+  extends: ["config:recommended", ":dependencyDashboard"],
+  // Las imágenes base y las actions las llevan sus managers nativos; lo demás
+  // son versiones sueltas dentro de ficheros, que necesitan un manager propio.
+  customManagers: [
+    {
+      // DepotDownloader: el ARG del Dockerfile. Al subirlo, un postUpgradeTask
+      // recalcula el sha256 (ver packageRules).
+      customType: "regex",
+      managerFilePatterns: ["/(^|/)Dockerfile$/"],
+      matchStrings: ["ARG DEPOTDOWNLOADER_VERSION=(?<currentValue>\\S+)"],
+      depNameTemplate: "SteamRE/DepotDownloader",
+      datasourceTemplate: "github-releases",
+      // las releases se etiquetan DepotDownloader_3.4.0
+      extractVersionTemplate: "^DepotDownloader_(?<version>.+)$",
+    },
+    {
+      // GE-Proton: la versión vive en el workflow, que es quien la pasa como
+      // build-arg y la usa de tag de la imagen
+      customType: "regex",
+      managerFilePatterns: ["/^\\.github/workflows/proton\\.yml$/"],
+      matchStrings: ["PROTON_VERSION:\\s*\"(?<currentValue>[0-9-]+)\""],
+      depNameTemplate: "GloriousEggroll/proton-ge-custom",
+      datasourceTemplate: "github-releases",
+      // las releases se etiquetan GE-Proton11-7: ni semver ni nada parecido,
+      // así que el orden se define a mano
+      extractVersionTemplate: "^GE-Proton(?<version>.+)$",
+      versioningTemplate: "regex:^(?<major>\\d+)-(?<minor>\\d+)$",
+    },
+  ],
+  packageRules: [
+    {
+      description: "DepotDownloader: al subir la versión, repinchar el sha256 del zip",
+      matchDepNames: ["SteamRE/DepotDownloader"],
+      postUpgradeTasks: {
+        commands: ["./scripts/pin-depotdownloader.sh {{{newValue}}}"],
+        fileFilters: ["proton/Dockerfile"],
+        executionMode: "update",
+      },
+    },
+    {
+      description: "GE-Proton: una PR por versión, que cada una cambia el tag publicado",
+      matchDepNames: ["GloriousEggroll/proton-ge-custom"],
+      separateMinorPatch: true,
+    },
+  ],
+}
