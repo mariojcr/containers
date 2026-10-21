@@ -2,7 +2,7 @@ FROM debian:13-slim
 
 # la versión de GE-Proton: única fuente de verdad (el workflow la lee de aquí
 # para el tag de la imagen) y lo que Renovate actualiza
-ARG PROTON_VERSION=11-7
+ARG PROTON_VERSION=11-11
 # DepotDownloader (SteamRE): sustituye a steamcmd para instalar y actualizar el
 # juego. Binario self-contained (.NET dentro), sin runtime ni dependencias.
 ARG DEPOTDOWNLOADER_VERSION=3.4.0
