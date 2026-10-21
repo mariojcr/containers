@@ -51,7 +51,7 @@ jobs:
       - name: Scan for vulnerabilities
         id: scan
         if: github.event_name != 'pull_request'
-        uses: crazy-max/ghaction-container-scan@v3
+        uses: crazy-max/ghaction-container-scan@v4
         with:
           image: ${{ env.REGISTRY }}/${{ env.APP }}:${{ env.VERSION }}
           annotations: true
