@@ -1,0 +1,24 @@
+# Dependabot lleva lo que sabe leer solo: las imágenes base de los Dockerfile
+# y las actions de los workflows. Es nativo, así que no necesita credenciales
+# y además puede escribir en .github/workflows/, que es justo lo que el
+# GITHUB_TOKEN de Actions no puede hacer.
+#
+# Lo que vive dentro de un ARG (GE-Proton, DepotDownloader) no lo ve: de eso
+# se encarga Renovate con sus managers propios (renovate.json5).
+version: 2
+updates:
+  - package-ecosystem: github-actions
+    directory: "/"
+    schedule:
+      interval: weekly
+      day: monday
+    commit-message:
+      prefix: ci
+
+  - package-ecosystem: docker
+    directories:
+      - "/proton"
+      - "/net-nomad"
+    schedule:
+      interval: weekly
+      day: monday

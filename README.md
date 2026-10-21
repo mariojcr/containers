@@ -17,25 +17,32 @@ versión en el caso de proton). Las PR solo comprueban que construye; publican
 
 ## Actualizaciones de dependencias
 
-Renovate corre los lunes (`.github/workflows/renovate.yml`) y abre una PR por
-cada versión nueva de:
+Dos bots, cada uno con lo que sabe hacer, y ninguna credencial que guardar.
 
-- las imágenes base de los `Dockerfile` y las actions de los workflows, con
-  sus managers nativos;
-- **DepotDownloader**, que es un `ARG` del Dockerfile de proton. Al subirlo,
-  un `postUpgradeTask` ejecuta `scripts/pin-depotdownloader.sh`, que baja el
-  zip nuevo y reescribe su `sha256` en el Dockerfile. Si eso no corriera, la
-  build falla al comprobar el hash, que es el fallo correcto;
-- **GE-Proton**, cuya versión es el `ARG PROTON_VERSION` del Dockerfile de
-  proton, de donde el workflow saca también el tag de la imagen. Sus releases
-  se llaman `GE-Proton11-7`, así que el orden se define con un `versioning`
-  propio en `renovate.json5`.
+**Dependabot** (`.github/dependabot.yml`) lleva las imágenes base de los
+Dockerfile y las actions de los workflows. Es nativo de GitHub: no necesita
+token, puede escribir en `.github/workflows/` y sus PR sí disparan la build,
+así que la subida se valida antes de entrar.
 
-Dos cosas que el `GITHUB_TOKEN` de Actions no puede hacer, y por las que
-conviene poner un PAT en el secret `RENOVATE_TOKEN`:
+**Renovate** (`renovate.json5`, los lunes desde su propio workflow) lleva lo
+que Dependabot no sabe leer, que son versiones sueltas dentro de ficheros:
 
-- **escribir en `.github/workflows/`**, así que las subidas de versión de las
-  propias actions se quedan listadas en el panel de dependencias sin PR (por
-  eso las versiones de las imágenes viven en los Dockerfile, no aquí);
-- **disparar otros workflows**: las PR que abre con el token por defecto no
-  lanzan la build, así que la subida no se valida construyendo.
+- **GE-Proton**, el `ARG PROTON_VERSION` del Dockerfile de proton, de donde el
+  workflow saca también el tag de la imagen. Sus releases se llaman
+  `GE-Proton11-7`, así que el orden se define con un `versioning` propio.
+- **DepotDownloader**, su `ARG` hermano. Al subirlo, un `postUpgradeTask`
+  ejecuta `scripts/pin-depotdownloader.sh`, que baja el zip nuevo y reescribe
+  su `sha256`. Si eso no corriera, la build falla al comprobar el hash, que es
+  el fallo correcto.
+
+Renovate corre con el `GITHUB_TOKEN` de Actions, que tiene dos límites: no
+puede escribir en `.github/workflows/` (por eso las versiones viven en los
+Dockerfile y las actions son cosa de Dependabot) y sus PR **no** disparan
+otros workflows. Es decir, una subida de GE-Proton se valida al entrar en
+`main`, no en la PR; si la build falla, el tag publicado se queda como estaba.
+Para que también se valide en la PR, habría que cambiar el token por una app
+de GitHub propia (`actions/create-github-app-token`), que es la única forma de
+tener las dos cosas sin un token personal.
+
+Para que Renovate pueda abrir PR, este repo tiene activado "Allow GitHub
+Actions to create and approve pull requests".

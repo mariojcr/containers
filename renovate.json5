@@ -1,8 +1,11 @@
 {
   $schema: "https://docs.renovatebot.com/renovate-schema.json",
   extends: ["config:recommended", ":dependencyDashboard"],
-  // Las imágenes base y las actions las llevan sus managers nativos; lo demás
-  // son versiones sueltas dentro de ficheros, que necesitan un manager propio.
+  // Solo los managers propios: las imágenes base y las actions las lleva
+  // Dependabot (.github/dependabot.yml), que es nativo y sí puede escribir en
+  // .github/workflows/. Aquí quedan las versiones sueltas dentro de ficheros,
+  // que Dependabot no sabe leer.
+  enabledManagers: ["custom.regex"],
   customManagers: [
     {
       // DepotDownloader: el ARG del Dockerfile. Al subirlo, un postUpgradeTask
