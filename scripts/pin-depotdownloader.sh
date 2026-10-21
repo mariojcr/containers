@@ -1,18 +1,21 @@
 #!/usr/bin/env bash
-# Renovate llama a esto cuando sube DEPOTDOWNLOADER_VERSION: baja el zip de esa
-# versión y escribe su sha256 en el Dockerfile. Si no llegara a ejecutarse, la
-# build falla al comprobar el hash, que es el fallo que queremos (nunca
-# instalar un binario sin verificar).
+# SPDX-FileCopyrightText: 2026 Mario Campos <https://github.com/mariojcr>
+# SPDX-License-Identifier: Apache-2.0
+#
+# Renovate runs this when it bumps DEPOTDOWNLOADER_VERSION: it downloads that
+# release's zip and writes its sha256 into the Dockerfile. If it never runs,
+# the build fails on the checksum, which is the failure we want — an
+# unverified binary is not installed.
 set -euo pipefail
 
-version="${1:?falta la versión de DepotDownloader}"
+version="${1:?missing DepotDownloader version}"
 dockerfile="${2:-proton/Dockerfile}"
 
-# la versión acaba en una URL y en un sed: que sea lo que decimos que es
+# the version ends up in a URL and in a sed expression: keep it to digits
 [[ "${version}" =~ ^[0-9]+(\.[0-9]+)*$ ]] \
-  || { echo "versión con formato raro: ${version}" >&2; exit 1; }
-url="https://github.com/SteamRE/DepotDownloader/releases/download/DepotDownloader_${version}/DepotDownloader-linux-x64.zip"
+  || { echo "suspicious version: ${version}" >&2; exit 1; }
 
+url="https://github.com/SteamRE/DepotDownloader/releases/download/DepotDownloader_${version}/DepotDownloader-linux-x64.zip"
 tmp="$(mktemp)"
 trap 'rm -f "${tmp}"' EXIT
 curl -fsSL --retry 3 -o "${tmp}" "${url}"
@@ -20,5 +23,5 @@ sha="$(sha256sum "${tmp}" | cut -d' ' -f1)"
 
 sed -i -E "s|^ARG DEPOTDOWNLOADER_SHA256=.*|ARG DEPOTDOWNLOADER_SHA256=${sha}|" "${dockerfile}"
 grep -q "^ARG DEPOTDOWNLOADER_SHA256=${sha}$" "${dockerfile}" \
-  || { echo "no se pudo escribir el sha256 en ${dockerfile}" >&2; exit 1; }
+  || { echo "could not write the sha256 into ${dockerfile}" >&2; exit 1; }
 echo "DepotDownloader ${version}: ${sha}"

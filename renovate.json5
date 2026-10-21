@@ -1,41 +1,43 @@
+// SPDX-FileCopyrightText: 2026 Mario Campos <https://github.com/mariojcr>
+// SPDX-License-Identifier: Apache-2.0
 {
   $schema: "https://docs.renovatebot.com/renovate-schema.json",
   extends: ["config:recommended", ":dependencyDashboard"],
-  // Solo los managers propios: las imágenes base y las actions las lleva
-  // Dependabot (.github/dependabot.yml), que es nativo y sí puede escribir en
-  // .github/workflows/. Aquí quedan las versiones sueltas dentro de ficheros,
-  // que Dependabot no sabe leer.
+  // Custom managers only: base images and actions belong to Dependabot
+  // (.github/dependabot.yml), which is native and may write to
+  // .github/workflows/. What is left here are the versions that live inside a
+  // file, which Dependabot cannot read.
   enabledManagers: ["custom.regex"],
   customManagers: [
     {
-      // DepotDownloader: el ARG del Dockerfile. Al subirlo, un postUpgradeTask
-      // recalcula el sha256 (ver packageRules).
+      // DepotDownloader. Bumping it re-pins the zip's sha256 through a
+      // post-upgrade task (see packageRules).
       customType: "regex",
       managerFilePatterns: ["/(^|/)Dockerfile$/"],
       matchStrings: ["ARG DEPOTDOWNLOADER_VERSION=(?<currentValue>\\S+)"],
       depNameTemplate: "SteamRE/DepotDownloader",
       datasourceTemplate: "github-releases",
-      // las releases se etiquetan DepotDownloader_3.4.0
+      // releases are tagged DepotDownloader_3.4.0
       extractVersionTemplate: "^DepotDownloader_(?<version>.+)$",
     },
     {
-      // GE-Proton: el ARG del Dockerfile, que es de donde el workflow saca el
-      // tag. En un fichero de .github/workflows/ no valdría: el GITHUB_TOKEN
-      // de Actions no puede escribir ahí y la PR nunca llegaría a crearse.
+      // GE-Proton, the ARG the workflow also reads the image tag from. In a
+      // file under .github/workflows/ this would not work: the Actions token
+      // may not write there, so the PR would never be created.
       customType: "regex",
       managerFilePatterns: ["/(^|/)Dockerfile$/"],
       matchStrings: ["ARG PROTON_VERSION=(?<currentValue>[0-9-]+)"],
       depNameTemplate: "GloriousEggroll/proton-ge-custom",
       datasourceTemplate: "github-releases",
-      // las releases se etiquetan GE-Proton11-7: ni semver ni nada parecido,
-      // así que el orden se define a mano
+      // releases are tagged GE-Proton11-11: neither semver nor anything like
+      // it, so the ordering is spelled out here
       extractVersionTemplate: "^GE-Proton(?<version>.+)$",
       versioningTemplate: "regex:^(?<major>\\d+)-(?<minor>\\d+)$",
     },
   ],
   packageRules: [
     {
-      description: "DepotDownloader: al subir la versión, repinchar el sha256 del zip",
+      description: "DepotDownloader: re-pin the zip's sha256 on a bump",
       matchDepNames: ["SteamRE/DepotDownloader"],
       postUpgradeTasks: {
         commands: ["./scripts/pin-depotdownloader.sh {{{newValue}}}"],
@@ -44,9 +46,14 @@
       },
     },
     {
-      description: "GE-Proton: una PR por versión, que cada una cambia el tag publicado",
+      description: "GE-Proton: re-pin the published sha512 on a bump, one PR per release",
       matchDepNames: ["GloriousEggroll/proton-ge-custom"],
       separateMinorPatch: true,
+      postUpgradeTasks: {
+        commands: ["./scripts/pin-proton.sh {{{newValue}}}"],
+        fileFilters: ["proton/Dockerfile"],
+        executionMode: "update",
+      },
     },
   ],
 }

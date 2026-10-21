@@ -1,16 +1,19 @@
-# Detecta versiones nuevas de lo que fijan las imágenes (DepotDownloader,
-# GE-Proton, imágenes base y actions) y abre una PR por cada una. La
-# configuración está en renovate.json5; esto solo es el runner.
+# SPDX-FileCopyrightText: 2026 Mario Campos <https://github.com/mariojcr>
+# SPDX-License-Identifier: Apache-2.0
 #
-# Con el GITHUB_TOKEN por defecto, las PR que abre Renovate NO disparan otros
-# workflows (protección de GitHub contra bucles), así que la build no valida la
-# subida. Para que sí lo haga, se pone un PAT de usuario o de app en el secret
-# RENOVATE_TOKEN (contents y pull-requests de escritura sobre este repo).
+# Renovate runs the custom managers: the versions that live inside a file
+# (DepotDownloader, GE-Proton), which Dependabot cannot read. Everything it
+# proposes is configured in renovate.json5; this is only the runner.
+#
+# With the default GITHUB_TOKEN, the PRs Renovate opens do NOT trigger other
+# workflows (GitHub's loop protection), so the build does not validate the
+# bump before it merges. A user or app token in the RENOVATE_TOKEN secret
+# (contents and pull-requests write on this repository) fixes that.
 name: renovate
 
 on:
   schedule:
-    # lunes a las 05:17 UTC, antes de ponerse a trastear
+    # Mondays at 05:17 UTC, before anyone starts poking at things
     - cron: "17 5 * * 1"
   workflow_dispatch:
   push:
@@ -18,7 +21,7 @@ on:
     paths:
       - renovate.json5
       - .github/workflows/renovate.yml
-      - scripts/pin-depotdownloader.sh
+      - scripts/*.sh
 
 permissions:
   contents: write
@@ -42,6 +45,6 @@ jobs:
         env:
           RENOVATE_REPOSITORIES: ${{ github.repository }}
           RENOVATE_PLATFORM: github
-          # los postUpgradeTasks están bloqueados salvo lo que liste esto
-          RENOVATE_ALLOWED_COMMANDS: '["^\\./scripts/pin-depotdownloader\\.sh "]'
+          # post-upgrade tasks are blocked unless listed here
+          RENOVATE_ALLOWED_COMMANDS: '["^\\./scripts/pin-(depotdownloader|proton)\\.sh "]'
           LOG_LEVEL: info

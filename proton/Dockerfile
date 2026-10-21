@@ -1,14 +1,27 @@
+# SPDX-FileCopyrightText: 2026 Mario Campos <https://github.com/mariojcr>
+# SPDX-License-Identifier: Apache-2.0
+
 FROM debian:13-slim
 
-# la versión de GE-Proton: única fuente de verdad (el workflow la lee de aquí
-# para el tag de la imagen) y lo que Renovate actualiza
+# The GE-Proton release to bundle. Single source of truth: Renovate updates it
+# here and the workflow reads the image tag from it. The checksum is the one
+# GloriousEggroll publishes next to the tarball, written by scripts/pin-proton.sh
+# when the version moves.
 ARG PROTON_VERSION=11-11
-# DepotDownloader (SteamRE): sustituye a steamcmd para instalar y actualizar el
-# juego. Binario self-contained (.NET dentro), sin runtime ni dependencias.
+ARG PROTON_SHA512=45721a7b625b2404d8896bb5e2a8b87fc9623a394873a6dd6b900c839681d5c01ec694ca00d003fc9c733c5f6c5648af8171985656f9fa47e20999fbebdbe235
+
+# DepotDownloader (SteamRE) installs and updates the game. It replaces
+# steamcmd, which could report success without updating, needed the installed
+# build's manifest kept around to avoid "Access Denied" on an anonymous login,
+# and now and then left its validate task suspended for two minutes.
 ARG DEPOTDOWNLOADER_VERSION=3.4.0
 ARG DEPOTDOWNLOADER_SHA256=a999dec66b4850fc961bd50366696d23c2d0fad7b18790e6a5647b2f19097a53
 
-ENV PROTON_VERSION=${PROTON_VERSION}
+# Proton wants a Steam client install to point at. This image is not one, but
+# the Steam client libraries below are all it reads from it; the game's Wine
+# prefix, the other half, goes in the game volume (see the entrypoint).
+ENV PROTON_VERSION=${PROTON_VERSION} \
+    STEAM_COMPAT_CLIENT_INSTALL_PATH=/opt/steam
 
 RUN dpkg --add-architecture i386 \
     && apt update \
@@ -33,8 +46,7 @@ RUN dpkg --add-architecture i386 \
     && rm -rf /var/lib/apt/lists/* \
     && apt clean \
     && apt autoremove -y \
-    && mkdir -p "/steamcmd/compatibilitytools.d" \
-    # DepotDownloader en /opt/depotdownloader
+    # DepotDownloader: one self-contained binary, no .NET runtime to install
     && mkdir -p /opt/depotdownloader \
     && curl -fsqL "https://github.com/SteamRE/DepotDownloader/releases/download/DepotDownloader_${DEPOTDOWNLOADER_VERSION}/DepotDownloader-linux-x64.zip" -o /tmp/dd.zip \
     && echo "${DEPOTDOWNLOADER_SHA256}  /tmp/dd.zip" | sha256sum -c - \
@@ -42,34 +54,39 @@ RUN dpkg --add-architecture i386 \
     && rm -f /tmp/dd.zip \
     && chmod +x /opt/depotdownloader/DepotDownloader \
     && /opt/depotdownloader/DepotDownloader -V \
-    # steamclient.so lo daba el propio steamcmd; ahora sale de la redist oficial
-    # (app 1007, depot 1006), que es de donde Valve lo publica. Las rutas
-    # /root/.steam/sdk{32,64} y STEAM_COMPAT_CLIENT_INSTALL_PATH no cambian:
-    # Proton (lsteamclient) las busca ahí.
-    # en la redist el de 64 bits va en linux64/ y el de 32 en la raíz
+    # steamclient.so comes from Valve's own redistributable (app 1007, depot
+    # 1006): 64-bit under linux64/, 32-bit at the root. Games look it up
+    # through ~/.steam/sdk{32,64}, so those stay where everyone expects them.
     && echo 'regex:^(steamclient.so|linux64/steamclient.so)$' > /tmp/sdk.txt \
     && /opt/depotdownloader/DepotDownloader -app 1007 -os linux -all-archs \
-         -dir /steamcmd -filelist /tmp/sdk.txt \
-    && mkdir -p /steamcmd/linux32 \
-    && mv /steamcmd/steamclient.so /steamcmd/linux32/steamclient.so \
+         -dir /opt/steam -filelist /tmp/sdk.txt \
+    && mkdir -p /opt/steam/linux32 \
+    && mv /opt/steam/steamclient.so /opt/steam/linux32/steamclient.so \
     && rm -f /tmp/sdk.txt \
-    && rm -rf /steamcmd/.DepotDownloader \
-    && test -s /steamcmd/linux64/steamclient.so \
-    && test -s /steamcmd/linux32/steamclient.so \
+    && rm -rf /opt/steam/.DepotDownloader \
+    && test -s /opt/steam/linux64/steamclient.so \
+    && test -s /opt/steam/linux32/steamclient.so \
     && mkdir -p /root/.steam \
-    && ln -s /steamcmd/linux64 /root/.steam/sdk64 \
+    && ln -s /opt/steam/linux64 /root/.steam/sdk64 \
     && ln -s /root/.steam/sdk64/steamclient.so /root/.steam/sdk64/steamservice.so \
-    && ln -s /steamcmd/linux32 /root/.steam/sdk32 \
+    && ln -s /opt/steam/linux32 /root/.steam/sdk32 \
     && ln -s /root/.steam/sdk32/steamclient.so /root/.steam/sdk32/steamservice.so \
-    # Desde GE-Proton 11 el archivo lleva la arquitectura en el nombre (y en el
-    # directorio que contiene); se prueba primero y se deja siempre en GE-Proton<versión>
-    && cd /steamcmd/compatibilitytools.d \
-    && { curl -fsqL "https://github.com/GloriousEggroll/proton-ge-custom/releases/download/GE-Proton${PROTON_VERSION}/GE-Proton${PROTON_VERSION}-x86_64.tar.gz" \
-         || curl -fsqL "https://github.com/GloriousEggroll/proton-ge-custom/releases/download/GE-Proton${PROTON_VERSION}/GE-Proton${PROTON_VERSION}.tar.gz"; } | tar zxf - \
-    && { [ -d "GE-Proton${PROTON_VERSION}" ] || mv "GE-Proton${PROTON_VERSION}-x86_64" "GE-Proton${PROTON_VERSION}"; } \
-    && test -x "GE-Proton${PROTON_VERSION}/proton"
+    # some servers look for the client install through these two instead
+    && ln -s /opt/steam /root/.steam/root \
+    && ln -s /opt/steam /root/.steam/steam \
+    # GE-Proton, without its version in the path: the entrypoint runs
+    # /opt/proton/proton whichever release this is. Releases from 11 carry the
+    # architecture in the file name; older ones do not.
+    && { curl -fsqL -o /tmp/proton.tar.gz "https://github.com/GloriousEggroll/proton-ge-custom/releases/download/GE-Proton${PROTON_VERSION}/GE-Proton${PROTON_VERSION}-x86_64.tar.gz" \
+         || curl -fsqL -o /tmp/proton.tar.gz "https://github.com/GloriousEggroll/proton-ge-custom/releases/download/GE-Proton${PROTON_VERSION}/GE-Proton${PROTON_VERSION}.tar.gz"; } \
+    && echo "${PROTON_SHA512}  /tmp/proton.tar.gz" | sha512sum -c - \
+    && mkdir -p /opt/proton \
+    && tar xzf /tmp/proton.tar.gz -C /opt/proton --strip-components=1 \
+    && rm -f /tmp/proton.tar.gz \
+    && test -x /opt/proton/proton \
+    && test -x /opt/proton/files/bin/wineserver
 
-# Después de lo pesado, para que cambiar el entrypoint no rehaga la imagen entera
+# Last, so that changing the entrypoint does not rebuild everything above
 COPY ./rootfs/ /
 RUN chmod +x /entrypoint.sh
 

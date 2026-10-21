@@ -1,6 +1,10 @@
-# Sidecar de red para tareas de Nomad. Publica :<versión> (se reescribe) y
-# :<versión>-<sha corto>, que no se mueve: esa es la que conviene fijar en un
-# job. La versión se sube a mano aquí cuando cambia el contrato del sidecar.
+# SPDX-FileCopyrightText: 2026 Mario Campos <https://github.com/mariojcr>
+# SPDX-License-Identifier: Apache-2.0
+#
+# Network sidecar for Nomad tasks. Two tags go out: :<version>, rewritten on
+# every build, and :<version>-<short sha>, which never moves — pin that one in
+# a job. The version is bumped by hand here when the sidecar's contract
+# changes.
 name: Net Nomad CI
 on:
   workflow_dispatch:
@@ -37,7 +41,7 @@ jobs:
       - uses: docker/build-push-action@v6
         with:
           context: ./${{ env.APP }}/
-          # en una PR solo se comprueba que construye
+          # on a pull request we only check that it builds
           push: ${{ github.event_name != 'pull_request' }}
           tags: |
             ${{ env.REGISTRY }}/${{ env.APP }}:${{ env.VERSION }}

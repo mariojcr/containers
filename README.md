@@ -1,48 +1,68 @@
+<!--
+SPDX-FileCopyrightText: 2026 Mario Campos <https://github.com/mariojcr>
+SPDX-License-Identifier: Apache-2.0
+-->
+
 # containers
 
-Imágenes pequeñas que usa el clúster de casa, cada una en su directorio y con
-su workflow. Se publican en `ghcr.io/mariojcr/<imagen>`.
+Small images for self-hosted infrastructure, one directory each, published to
+`ghcr.io/mariojcr`.
 
-| Imagen | Qué es |
+| Image | What it is |
 |---|---|
-| [`proton`](proton/) | Servidores dedicados de Steam: DepotDownloader + GE-Proton, para binarios de Windows o nativos |
-| [`net-nomad`](net-nomad/) | Sidecar de red para tareas de Nomad: cortafuegos de la asignación y NAT-PMP |
+| [`proton`](proton/) | A Steam dedicated server in a container: DepotDownloader installs the game, the binary runs native or under GE-Proton |
+| [`net-nomad`](net-nomad/) | Network sidecar for Nomad tasks: the allocation's firewall and an optional NAT-PMP forwarded port |
 
-## Cómo se construyen
+They run on a home cluster on Nomad, but neither assumes it: `proton` only
+needs a volume and some environment variables, and `net-nomad` needs a shared
+network namespace and `NET_ADMIN`.
 
-Cada imagen tiene un workflow en `.github/workflows/<imagen>.yml` que entra
-cuando cambia su directorio (o el propio workflow, que es donde vive la
-versión en el caso de proton). Las PR solo comprueban que construye; publican
-únicamente los push a una rama.
+## Tags
 
-## Actualizaciones de dependencias
+Every build publishes two: the version (`proton:11-11`, `net-nomad:1.0.0`),
+which is rewritten each time, and `<version>-<short sha>`, which never moves.
+Pin the second one where you care about knowing exactly what is running; a
+restart then cannot bring in a different image than the one you tested.
 
-Dos bots, cada uno con lo que sabe hacer, y ninguna credencial que guardar.
+## Builds
 
-**Dependabot** (`.github/dependabot.yml`) lleva las imágenes base de los
-Dockerfile y las actions de los workflows. Es nativo de GitHub: no necesita
-token, puede escribir en `.github/workflows/` y sus PR sí disparan la build,
-así que la subida se valida antes de entrar.
+Each image has a workflow in `.github/workflows/` that runs when its directory
+changes. Pull requests only check that the image builds; pushes to a branch
+publish it.
 
-**Renovate** (`renovate.json5`, los lunes desde su propio workflow) lleva lo
-que Dependabot no sabe leer, que son versiones sueltas dentro de ficheros:
+## Dependency updates
 
-- **GE-Proton**, el `ARG PROTON_VERSION` del Dockerfile de proton, de donde el
-  workflow saca también el tag de la imagen. Sus releases se llaman
-  `GE-Proton11-7`, así que el orden se define con un `versioning` propio.
-- **DepotDownloader**, su `ARG` hermano. Al subirlo, un `postUpgradeTask`
-  ejecuta `scripts/pin-depotdownloader.sh`, que baja el zip nuevo y reescribe
-  su `sha256`. Si eso no corriera, la build falla al comprobar el hash, que es
-  el fallo correcto.
+Two bots, each doing what it is good at, and no credentials to store.
 
-Renovate corre con el `GITHUB_TOKEN` de Actions, que tiene dos límites: no
-puede escribir en `.github/workflows/` (por eso las versiones viven en los
-Dockerfile y las actions son cosa de Dependabot) y sus PR **no** disparan
-otros workflows. Es decir, una subida de GE-Proton se valida al entrar en
-`main`, no en la PR; si la build falla, el tag publicado se queda como estaba.
-Para que también se valide en la PR, habría que cambiar el token por una app
-de GitHub propia (`actions/create-github-app-token`), que es la única forma de
-tener las dos cosas sin un token personal.
+**Dependabot** (`.github/dependabot.yml`) takes the Dockerfiles' base images
+and the workflows' actions. It is native to GitHub, so it needs no token, it
+may write under `.github/workflows/`, and the pull requests it opens do
+trigger the build — the bump is validated before it merges.
 
-Para que Renovate pueda abrir PR, este repo tiene activado "Allow GitHub
-Actions to create and approve pull requests".
+**Renovate** (`renovate.json5`, Mondays from its own workflow) takes what
+Dependabot cannot read, which is versions that live inside a file:
+
+- **GE-Proton**, the `ARG PROTON_VERSION` in proton's Dockerfile, which the
+  workflow also reads the image tag from.
+- **DepotDownloader**, the ARG next to it.
+
+Both are pinned by checksum, and a post-upgrade task re-pins the checksum when
+the version moves (`scripts/pin-proton.sh`, `scripts/pin-depotdownloader.sh`).
+If one of those never runs, the build fails on the checksum, which is the
+right failure: an unverified artifact is not installed.
+
+Renovate runs with the Actions `GITHUB_TOKEN`, which has two limits: it cannot
+write under `.github/workflows/` (hence the versions living in Dockerfiles and
+the actions belonging to Dependabot), and the pull requests it opens do **not**
+trigger other workflows. A GE-Proton bump is therefore validated when it lands
+on `main`, not on the pull request; if that build fails, the published tag
+stays as it was. Swapping the token for a GitHub App
+(`actions/create-github-app-token`) closes that gap without a personal access
+token.
+
+For Renovate to open pull requests at all, the repository needs *Allow GitHub
+Actions to create and approve pull requests*.
+
+## License
+
+[Apache-2.0](LICENSE).

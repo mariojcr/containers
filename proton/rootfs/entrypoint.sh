@@ -1,12 +1,15 @@
 #!/bin/bash
-# Un servidor dedicado de Steam dentro de un contenedor: instala o actualiza la
-# app con DepotDownloader y arranca el binario, nativo o de Windows bajo Proton.
+# SPDX-FileCopyrightText: 2026 Mario Campos <https://github.com/mariojcr>
+# SPDX-License-Identifier: Apache-2.0
 #
-# Lo mínimo es APP_ID y EXE_PATH. Todas las variables están en el README de la
-# imagen; aquí solo se comenta lo que no se ve en el nombre.
+# A Steam dedicated server in a container: DepotDownloader installs or updates
+# the app, then the binary runs, native or under Proton when it is a .exe.
+#
+# APP_ID and EXE_PATH are the minimum. Every variable is documented in the
+# image's README; only what the name does not say is commented here.
 set -uo pipefail
 
-# --- entrada ---------------------------------------------------------------
+# --- input -----------------------------------------------------------------
 GAME_DIR="${GAME_DIR:-/game}"
 WORK_DIR="${WORK_DIR:-${GAME_DIR}}"
 APP_ID="${APP_ID:-}"
@@ -27,12 +30,14 @@ SKIP_UPDATE="${SKIP_UPDATE:-false}"
 UPDATE_REQUIRED="${UPDATE_REQUIRED:-false}"
 
 USE_PROTON="${USE_PROTON:-auto}"
+PROTON_DIR="${PROTON_DIR:-/opt/proton}"
 XVFB_NEEDED="${XVFB_NEEDED:-false}"
 PRE_START_CMD="${PRE_START_CMD:-}"
 
 READ_LOGS_FILE="${READ_LOGS_FILE:-}"
 LOG_WAIT_SECONDS="${LOG_WAIT_SECONDS:-600}"
-# compatibilidad: antes era obligatoria y decía si seguir el log del juego
+# kept for compatibility: it used to be required, and says whether to follow
+# the game's log file
 BACKGROUND_PROCESS="${BACKGROUND_PROCESS:-true}"
 STOP_SIGNAL="${STOP_SIGNAL:-TERM}"
 STOP_GRACE_SECONDS="${STOP_GRACE_SECONDS:-80}"
@@ -49,33 +54,32 @@ die() { echo "$*" >&2; exit 1; }
 [ -z "${STEAM_PASSWORD}" ] || [ -n "${STEAM_USERNAME}" ] \
   || die "STEAM_PASSWORD needs STEAM_USERNAME. Exiting."
 
-# Un .exe se ejecuta bajo Proton; cualquier otra cosa, nativa. USE_PROTON lo
-# fuerza en los dos sentidos (hay servidores nativos con nombres raros).
+# A .exe runs under Proton, anything else runs native. USE_PROTON forces it
+# either way, for the servers whose binary is named like neither.
 case "${USE_PROTON}" in
   auto) case "${EXE_PATH,,}" in *.exe) USE_PROTON=true ;; *) USE_PROTON=false ;; esac ;;
   true|false) ;;
   *) die "USE_PROTON must be auto, true or false. Exiting." ;;
 esac
-# El depot que toca: el de Windows si corre bajo Proton, el nativo si no
+# which depot to pull: the Windows one under Proton, the native one otherwise
 [ -n "${APP_OS}" ] || { [ "${USE_PROTON}" = "true" ] && APP_OS=windows || APP_OS=linux; }
 
 if [ "${USE_PROTON}" = "true" ]; then
-  [ -n "${PROTON_VERSION:-}" ] || die "PROTON_VERSION is not set in the image. Exiting."
-  PROTON="/steamcmd/compatibilitytools.d/GE-Proton${PROTON_VERSION}/proton"
+  PROTON="${PROTON_DIR}/proton"
   [ -x "${PROTON}" ] || die "No Proton at ${PROTON}. Exiting."
-  export STEAM_COMPAT_CLIENT_INSTALL_PATH="${STEAM_COMPAT_CLIENT_INSTALL_PATH:-/steamcmd}"
-  # El prefijo vive en el volumen: crearlo en cada arranque cuesta tiempo y
-  # pierde lo que el juego escriba en su registro. Para empezar de cero, se
-  # borra el directorio.
+  export STEAM_COMPAT_CLIENT_INSTALL_PATH="${STEAM_COMPAT_CLIENT_INSTALL_PATH:-/opt/steam}"
+  # The Wine prefix lives in the volume: building it on every start costs time
+  # and throws away whatever the game wrote to its registry. To start over,
+  # delete the directory.
   export STEAM_COMPAT_DATA_PATH="${STEAM_COMPAT_DATA_PATH:-${GAME_DIR}/.compatdata/${APP_ID:-app}}"
   mkdir -p "${STEAM_COMPAT_DATA_PATH}"
 fi
 
-# --- instalar o actualizar -------------------------------------------------
-# DepotDownloader (SteamRE) en lugar de steamcmd: código de salida de verdad,
-# estado propio en <GAME_DIR>/.DepotDownloader y los depots por WebSocket (443).
-# Solo borra ficheros que estaban en el manifest anterior y ya no están en el
-# nuevo, así que las partidas, los logs y la configuración no se tocan nunca.
+# --- install or update -----------------------------------------------------
+# DepotDownloader keeps its state (the installed manifest) in
+# <GAME_DIR>/.DepotDownloader, so it survives the container, and it only
+# deletes files that were in the previous manifest and are gone from the new
+# one — saves, logs and configuration are never in a manifest.
 update_app() {
   local args=(-app "${APP_ID}" -os "${APP_OS}" -osarch "${APP_ARCH}"
               -dir "${GAME_DIR}" -max-downloads "${MAX_DOWNLOADS}")
@@ -86,7 +90,7 @@ update_app() {
   [ -n "${STEAM_USERNAME}" ] && args+=(-username "${STEAM_USERNAME}")
   { [ "${1:-}" = "validate" ] || [ "${VALIDATE}" = "true" ]; } && args+=(-validate)
   if [ -n "${STEAM_PASSWORD}" ]; then
-    # por stdin: así no queda en la línea de comandos del proceso
+    # over stdin, so it stays out of the process command line
     printf '%s\n' "${STEAM_PASSWORD}" | "${DEPOTDOWNLOADER}" "${args[@]}"
   else
     "${DEPOTDOWNLOADER}" "${args[@]}"
@@ -94,14 +98,15 @@ update_app() {
 }
 
 if [ "${SKIP_UPDATE}" = "true" ]; then
-  echo "SKIP_UPDATE=true: Steam untouched, running what is in ${GAME_DIR}"
+  echo "SKIP_UPDATE=true: leaving Steam alone, running what is in ${GAME_DIR}"
 elif ! update_app; then
-  # El segundo intento valida: compara el disco contra el manifest chunk a
-  # chunk y rehace solo lo que no cuadre (sirve para una instalación a medias).
+  # The retry validates: it compares the disk against the manifest chunk by
+  # chunk and redoes only what does not match, which also repairs a half-done
+  # install.
   echo "Update of app ${APP_ID} failed; retrying with validation..."
   if ! update_app validate; then
-    # Un Steam caído no debería dejar el servidor sin arrancar: si el juego ya
-    # está instalado se sigue con lo que hay. UPDATE_REQUIRED=true lo impide.
+    # Steam being down should not keep the server from starting: with the game
+    # installed it runs the build on disk. UPDATE_REQUIRED=true forbids that.
     if [ "${UPDATE_REQUIRED}" = "true" ] || [ ! -f "${EXE_PATH}" ]; then
       die "Update of app ${APP_ID} failed and there is no usable install. Exiting."
     fi
@@ -114,17 +119,17 @@ if [ -n "${PRE_START_CMD}" ]; then
   bash -c "${PRE_START_CMD}" || die "Pre-start command failed. Exiting."
 fi
 
-# --- arrancar --------------------------------------------------------------
+# --- start -----------------------------------------------------------------
 cd "${WORK_DIR}" || die "No ${WORK_DIR}. Exiting."
 
 run_server() {
   local cmd=()
-  # Sin DISPLAY, Wine se queda colgado en algunos juegos antes de cargar el exe
+  # without a DISPLAY, Wine hangs in some games before it loads the exe
   [ "${XVFB_NEEDED}" = "true" ] && cmd+=(xvfb-run --auto-servernum)
   [ "${USE_PROTON}" = "true" ] && cmd+=("${PROTON}" run)
   cmd+=("${EXE_PATH}")
-  # Los argumentos del servidor: los del propio contenedor tal cual (los que
-  # respetan comillas y espacios) o, si no hay, SERVER_ARGS partido por espacios
+  # the server's arguments: the container's own, verbatim (those keep quotes
+  # and spaces), or else SERVER_ARGS split on whitespace
   if [ "$#" -gt 0 ]; then
     cmd+=("$@")
   elif [ -n "${SERVER_ARGS}" ]; then
@@ -137,9 +142,9 @@ run_server() {
   SERVER_PID=$!
 }
 
-# Al parar la tarea, el orquestador manda SIGTERM al proceso 1 (este script):
-# se reenvía al servidor y se le da tiempo a guardar y salir antes de que lo
-# maten a él (el kill_timeout de Nomad debe ser mayor que STOP_GRACE_SECONDS).
+# On stop the orchestrator sends SIGTERM to pid 1 (this script): it is passed
+# on to the server, which gets time to save and exit before anyone kills it
+# (Nomad's kill_timeout must be longer than STOP_GRACE_SECONDS).
 shutdown() {
   echo "Stopping game server (pid ${SERVER_PID})..."
   pkill "-${STOP_SIGNAL}" -P "${SERVER_PID}" 2>/dev/null
@@ -151,7 +156,7 @@ shutdown() {
   if kill -0 "${SERVER_PID}" 2>/dev/null; then
     echo "Server still running after ${STOP_GRACE_SECONDS}s; killing it..."
     if [ "${USE_PROTON}" = "true" ]; then
-      "${PROTON%/proton}/files/bin/wineserver" -k 2>/dev/null
+      "${PROTON_DIR}/files/bin/wineserver" -k 2>/dev/null
     fi
     pkill -KILL -P "${SERVER_PID}" 2>/dev/null
     kill -KILL "${SERVER_PID}" 2>/dev/null
@@ -163,9 +168,9 @@ trap shutdown TERM INT
 
 run_server "$@"
 
-# Muchos servidores escriben su log en un fichero en vez de a stdout: se sigue
-# para que salga por los logs del contenedor. En uno recién creado el fichero
-# aún no existe.
+# Many servers write their log to a file instead of stdout: follow it so it
+# shows up in the container's logs. On a brand new server the file is not
+# there yet.
 if [ "${BACKGROUND_PROCESS}" = "true" ] && [ -n "${READ_LOGS_FILE}" ]; then
   for _ in $(seq 1 "${LOG_WAIT_SECONDS}"); do
     [ -f "${READ_LOGS_FILE}" ] && break
@@ -180,8 +185,8 @@ if [ "${BACKGROUND_PROCESS}" = "true" ] && [ -n "${READ_LOGS_FILE}" ]; then
   fi
 fi
 
-# Si el servidor muere, la tarea termina (y el orquestador la reinicia); el
-# trap sigue atendiendo SIGTERM mientras tanto
+# If the server dies the task ends (and the orchestrator restarts it); the
+# trap keeps serving SIGTERM in the meantime
 wait "${SERVER_PID}"
 RC=$?
 [ -n "${TAIL_PID:-}" ] && kill "${TAIL_PID}" 2>/dev/null

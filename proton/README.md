@@ -1,72 +1,78 @@
+<!--
+SPDX-FileCopyrightText: 2026 Mario Campos <https://github.com/mariojcr>
+SPDX-License-Identifier: Apache-2.0
+-->
+
 # proton
 
-Un servidor dedicado de Steam dentro de un contenedor: la imagen instala o
-actualiza la app con [DepotDownloader](https://github.com/SteamRE/DepotDownloader)
-y arranca el binario, nativo o de Windows bajo
+A Steam dedicated server in a container. The image installs or updates the app
+with [DepotDownloader](https://github.com/SteamRE/DepotDownloader) and starts
+the server binary, native or — when it is an `.exe` — under
 [GE-Proton](https://github.com/GloriousEggroll/proton-ge-custom).
 
-`ghcr.io/mariojcr/proton:<versión de GE-Proton>` (p. ej. `11-7`), y
-`…:<versión>-<sha>` para fijar una build concreta.
+`ghcr.io/mariojcr/proton:<GE-Proton version>` (for example `11-11`), plus
+`…:<version>-<short sha>` to pin an exact build.
 
-## Lo mínimo
+## The minimum
 
 ```hcl
 env {
   APP_ID   = "2278520"                      # Enshrouded Dedicated Server
-  EXE_PATH = "/game/enshrouded_server.exe"  # .exe → se ejecuta bajo Proton
+  EXE_PATH = "/game/enshrouded_server.exe"  # an .exe runs under Proton
 }
 ```
 
-El juego vive en `/game`, que debe ser un volumen: ahí van la instalación, las
-partidas y el estado de DepotDownloader (`.DepotDownloader/`, el manifest
-instalado, lo que permite actualizar por diferencias).
+The game lives in `/game`, which must be a volume: the install, the saves and
+DepotDownloader's state (`.DepotDownloader/`, the installed manifest, which is
+what makes the next update a delta) all go there.
 
 ## Variables
 
-### Qué instalar
+### What to install
 
-| Variable | Por defecto | Para qué |
+| Variable | Default | What for |
 |---|---|---|
-| `APP_ID` | — | La app de Steam. Obligatoria salvo con `SKIP_UPDATE=true` |
-| `GAME_DIR` | `/game` | Dónde se instala |
-| `APP_OS` | `windows` con Proton, `linux` sin él | Qué depot bajar |
-| `APP_ARCH` | `64` | 32 o 64 bits |
-| `DEPOT_ID` | — | Un solo depot en vez de todos los de la app |
-| `MANIFEST_ID` | — | Clava una build exacta (necesita `DEPOT_ID`) |
-| `APP_BRANCH` | `public` | Una rama (beta, experimental…) |
-| `BRANCH_PASSWORD` | — | Si la rama la pide |
-| `STEAM_USERNAME` | — | Para apps que no se bajan en anónimo |
-| `STEAM_PASSWORD` | — | Se pasa por stdin, no por la línea de comandos |
-| `VALIDATE` | `false` | Validar siempre contra el manifest (lento) |
-| `MAX_DOWNLOADS` | `8` | Descargas en paralelo |
-| `SKIP_UPDATE` | `false` | No tocar Steam: arranca lo que haya en el volumen |
-| `UPDATE_REQUIRED` | `false` | Abortar si el update falla, en vez de arrancar con lo instalado |
+| `APP_ID` | — | The Steam app. Required unless `SKIP_UPDATE=true` |
+| `GAME_DIR` | `/game` | Where it is installed |
+| `APP_OS` | `windows` under Proton, `linux` otherwise | Which depot to pull |
+| `APP_ARCH` | `64` | 32- or 64-bit |
+| `DEPOT_ID` | — | One depot instead of every depot of the app |
+| `MANIFEST_ID` | — | Pin an exact build (needs `DEPOT_ID`) |
+| `APP_BRANCH` | `public` | A branch (beta, experimental…) |
+| `BRANCH_PASSWORD` | — | If the branch asks for one |
+| `STEAM_USERNAME` | — | For apps that anonymous cannot download |
+| `STEAM_PASSWORD` | — | Passed over stdin, not on the command line |
+| `VALIDATE` | `false` | Always validate against the manifest (slow) |
+| `MAX_DOWNLOADS` | `8` | Parallel chunk downloads |
+| `SKIP_UPDATE` | `false` | Leave Steam alone and run what is in the volume |
+| `UPDATE_REQUIRED` | `false` | Abort when the update fails instead of starting the installed build |
 
-### Cómo arrancarlo
+### How to start it
 
-| Variable | Por defecto | Para qué |
+| Variable | Default | What for |
 |---|---|---|
-| `EXE_PATH` | — | El binario del servidor. Obligatoria |
-| `SERVER_ARGS` | — | Argumentos, partidos por espacios. Si necesitas comillas, pásalos como `args` de la tarea: se usan tal cual |
-| `USE_PROTON` | `auto` | `auto` mira si acaba en `.exe`; `true`/`false` lo fuerzan |
-| `WORK_DIR` | `GAME_DIR` | Directorio de trabajo del servidor |
-| `XVFB_NEEDED` | `false` | Algunos juegos de Windows se cuelgan sin `DISPLAY` |
-| `PRE_START_CMD` | — | Un comando antes de arrancar (si falla, no arranca) |
-| `STEAM_COMPAT_DATA_PATH` | `GAME_DIR/.compatdata/APP_ID` | El prefijo de Wine. Vive en el volumen: para empezar de cero, se borra |
+| `EXE_PATH` | — | The server binary. Required |
+| `SERVER_ARGS` | — | Arguments, split on whitespace. If you need quoting, pass them as the task's `args` instead: those are used verbatim |
+| `USE_PROTON` | `auto` | `auto` goes by the `.exe` suffix; `true`/`false` force it |
+| `WORK_DIR` | `GAME_DIR` | The server's working directory |
+| `XVFB_NEEDED` | `false` | Some Windows games hang without a `DISPLAY` |
+| `PRE_START_CMD` | — | A command to run first; if it fails, the server does not start |
+| `PROTON_DIR` | `/opt/proton` | Where GE-Proton is |
+| `STEAM_COMPAT_DATA_PATH` | `GAME_DIR/.compatdata/APP_ID` | The Wine prefix. It lives in the volume; delete the directory to start over |
 
-### Logs y parada
+### Logs and shutdown
 
-| Variable | Por defecto | Para qué |
+| Variable | Default | What for |
 |---|---|---|
-| `READ_LOGS_FILE` | — | Si el juego escribe su log a fichero, se sigue y sale por stdout |
-| `LOG_WAIT_SECONDS` | `600` | Cuánto esperar a que aparezca ese fichero la primera vez |
-| `BACKGROUND_PROCESS` | `true` | A `false` no sigue el log |
-| `STOP_SIGNAL` | `TERM` | La señal que espera el juego para guardar y salir |
-| `STOP_GRACE_SECONDS` | `80` | Cuánto se le da antes de matarlo. El `kill_timeout` de Nomad debe ser mayor |
+| `READ_LOGS_FILE` | — | If the game writes its log to a file, follow it onto stdout |
+| `LOG_WAIT_SECONDS` | `600` | How long to wait for that file to appear the first time |
+| `BACKGROUND_PROCESS` | `true` | `false` does not follow the log |
+| `STOP_SIGNAL` | `TERM` | The signal the game expects in order to save and exit |
+| `STOP_GRACE_SECONDS` | `80` | How long it gets before being killed. Nomad's `kill_timeout` must be longer |
 
-## Ejemplos
+## Examples
 
-Windows bajo Proton, con log a fichero (Enshrouded):
+Windows under Proton, logging to a file (Enshrouded):
 
 ```hcl
 env {
@@ -77,17 +83,17 @@ env {
 }
 ```
 
-Nativo de Linux con argumentos (Valheim):
+Native Linux with arguments (Valheim):
 
 ```hcl
 env {
   APP_ID      = "896660"
   EXE_PATH    = "/game/valheim_server.x86_64"
-  SERVER_ARGS = "-nographics -batchmode -name MiServer -port 2456 -world Dedicated"
+  SERVER_ARGS = "-nographics -batchmode -name MyServer -port 2456 -world Dedicated"
 }
 ```
 
-Build clavada, para que un reinicio no se traiga un parche sin avisar:
+An exact build, so that a restart cannot bring in a patch you did not ask for:
 
 ```hcl
 env {
@@ -98,17 +104,19 @@ env {
 }
 ```
 
-## Detalles que importan
+## Details that matter
 
-- **Las partidas no se tocan.** DepotDownloader solo borra ficheros que
-  estaban en el manifest anterior y ya no están en el nuevo; `savegame/`,
-  `logs/` y la configuración nunca han estado en un manifest.
-- **Un Steam caído no deja el servidor abajo.** Si el update falla dos veces
-  (la segunda validando) y el juego ya está instalado, arranca con lo que hay
-  y lo avisa en el log. `UPDATE_REQUIRED=true` recupera el comportamiento de
-  abortar.
-- **Migrar desde una instalación hecha con steamcmd** no re-descarga nada: la
-  primera pasada valida el disco contra el manifest chunk a chunk (7,6 GB en
-  21 s en un VPS de OVH) y baja solo lo que falte.
-- `steamclient.so` sale de la redistribuible oficial (app 1007), no de
-  steamcmd, en las rutas de siempre (`~/.steam/sdk32`, `~/.steam/sdk64`).
+- **Saves are never touched.** DepotDownloader only deletes files that were in
+  the previous manifest and are gone from the new one; `savegame/`, `logs/`
+  and configuration have never been in a manifest.
+- **Steam being down does not keep the server down.** If the update fails
+  twice (the second time validating) and the game is installed, it starts the
+  build on disk and says so in the log. `UPDATE_REQUIRED=true` restores the
+  old behaviour of aborting.
+- **Migrating an install made by steamcmd re-downloads nothing**: the first
+  pass validates the disk against the manifest chunk by chunk (7.6 GB in 21 s
+  on an OVH VPS) and fetches only what is missing.
+- **There is no Steam client in here.** `steamclient.so` comes from Valve's
+  redistributable (app 1007) and sits in `/opt/steam/linux{32,64}`, reachable
+  through the usual `~/.steam/sdk32` and `~/.steam/sdk64`. GE-Proton is
+  unpacked at `/opt/proton`, without its version in the path.

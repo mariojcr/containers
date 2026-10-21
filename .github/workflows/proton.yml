@@ -1,11 +1,13 @@
-# GE-Proton sobre Debian para servidores dedicados de Steam. La versión vive
-# en el ARG del Dockerfile (ahí la actualiza Renovate, que no puede escribir
-# en ficheros de .github/workflows/ con el token de Actions) y de ahí sale
-# también el tag de la imagen.
+# SPDX-FileCopyrightText: 2026 Mario Campos <https://github.com/mariojcr>
+# SPDX-License-Identifier: Apache-2.0
 #
-# Publica dos tags: la versión (:11-7), que se reescribe en cada build, y
-# :11-7-<sha corto>, que no se mueve nunca — es la que conviene fijar en un
-# job para saber exactamente qué está corriendo.
+# GE-Proton on Debian for Steam dedicated servers. The version lives in the
+# Dockerfile's ARG — Renovate updates it there, since with the Actions token
+# it cannot write under .github/workflows/ — and the image tag comes from it.
+#
+# Two tags go out: the version (:11-11), rewritten on every build, and
+# :11-11-<short sha>, which never moves. Pin that one in a job to know exactly
+# what is running.
 name: Proton CI
 on:
   workflow_dispatch:
@@ -46,7 +48,7 @@ jobs:
       - uses: docker/build-push-action@v6
         with:
           context: ./${{ env.APP }}/
-          # en una PR solo se comprueba que construye
+          # on a pull request we only check that it builds
           push: ${{ github.event_name != 'pull_request' }}
           build-args: |
             PROTON_VERSION=${{ steps.meta.outputs.version }}

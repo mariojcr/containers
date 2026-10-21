@@ -1,33 +1,38 @@
+<!--
+SPDX-FileCopyrightText: 2026 Mario Campos <https://github.com/mariojcr>
+SPDX-License-Identifier: Apache-2.0
+-->
+
 # net-nomad
 
-Sidecar de red para una tarea de Nomad: corre antes que el servicio, en el
-mismo namespace de red, y deja montado el cortafuegos de la asignación. Si se
-le pide, mantiene además un puerto abierto hacia fuera por NAT-PMP (el
-port forwarding de ProtonVPN).
+A network sidecar for a Nomad task: it runs before the service, in the same
+network namespace, and leaves the allocation's firewall in place. On request
+it also keeps a port open from the outside through NAT-PMP (ProtonVPN's port
+forwarding).
 
-`ghcr.io/mariojcr/net-nomad:1.0.0`, y `…:1.0.0-<sha>` para fijar una build concreta
+`ghcr.io/mariojcr/net-nomad:1.0.0`, plus `…:1.0.0-<short sha>` to pin an exact
+build.
 
-Necesita `NET_ADMIN` y compartir el namespace de red con la tarea que protege
-(en Nomad, un `task` con `lifecycle { hook = "prestart" }` dentro del mismo
-grupo).
+It needs `NET_ADMIN` and the network namespace of the task it protects — in
+Nomad, a task with `lifecycle { hook = "prestart" }` in the same group.
 
 ## Variables
 
-| Variable | Por defecto | Para qué |
+| Variable | Default | What for |
 |---|---|---|
-| `FW_DNS` | — | IPs de DNS a las que se permite salir (53/udp y 53/tcp), separadas por comas. Sin esto, no hay DNS |
-| `FW_EGRESS` | `false` | `true` permite toda la salida |
-| `FW_ALLOW_IN` | — | Reglas de entrada `ORIGEN:PROTO[:PUERTO]`, separadas por comas. El puerto admite rango (`8000-9000`); sin puerto, todos |
-| `FW_ALLOW_OUT` | — | Lo mismo para salida: `DESTINO:PROTO[:PUERTO]` |
-| `NATPMP_ENABLED` | `false` | `true` pide puerto por NAT-PMP y lo renueva |
-| `NATPMP_GATEWAY` | `10.2.0.1` | El gateway NAT-PMP (por defecto el de ProtonVPN) |
-| `NATPMP_INTERVAL` | `45` | Segundos entre renovaciones (el mapeo dura 60) |
+| `FW_DNS` | — | DNS addresses allowed out (53/udp and 53/tcp), comma separated. Without it there is no DNS |
+| `FW_EGRESS` | `false` | `true` allows all outbound traffic |
+| `FW_ALLOW_IN` | — | Inbound rules, `SOURCE:PROTO[:PORT]`, comma separated. The port may be a range (`8000-9000`); without one, any port |
+| `FW_ALLOW_OUT` | — | The same outbound: `DESTINATION:PROTO[:PORT]` |
+| `NATPMP_ENABLED` | `false` | `true` asks for a forwarded port and renews it |
+| `NATPMP_GATEWAY` | `10.2.0.1` | The NAT-PMP gateway (ProtonVPN's by default) |
+| `NATPMP_INTERVAL` | `45` | Seconds between renewals (the mapping lasts 60) |
 
-La política base es `DROP` en INPUT, OUTPUT y FORWARD; se permiten siempre
-loopback, ICMP y lo ya establecido. Cuando NAT-PMP asigna un puerto nuevo, la
-regla del anterior se retira y se abre la del nuevo (TCP y UDP).
+The base policy is `DROP` on INPUT, OUTPUT and FORWARD; loopback, ICMP and
+established traffic are always allowed. When NAT-PMP hands out a new port, the
+rule for the previous one is removed and the new one is opened, TCP and UDP.
 
-## Ejemplo
+## Example
 
 ```hcl
 task "network-rules" {
@@ -37,8 +42,8 @@ task "network-rules" {
     sidecar = true
   }
   config {
-    image      = "ghcr.io/mariojcr/net-nomad:1.0.0"
-    cap_add    = ["NET_ADMIN"]
+    image   = "ghcr.io/mariojcr/net-nomad:1.0.0"
+    cap_add = ["NET_ADMIN"]
   }
   env {
     FW_DNS       = "192.168.0.1"

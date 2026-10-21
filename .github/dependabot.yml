@@ -1,10 +1,12 @@
-# Dependabot lleva lo que sabe leer solo: las imágenes base de los Dockerfile
-# y las actions de los workflows. Es nativo, así que no necesita credenciales
-# y además puede escribir en .github/workflows/, que es justo lo que el
-# GITHUB_TOKEN de Actions no puede hacer.
+# SPDX-FileCopyrightText: 2026 Mario Campos <https://github.com/mariojcr>
+# SPDX-License-Identifier: Apache-2.0
 #
-# Lo que vive dentro de un ARG (GE-Proton, DepotDownloader) no lo ve: de eso
-# se encarga Renovate con sus managers propios (renovate.json5).
+# Dependabot takes what it can read on its own: the Dockerfiles' base images
+# and the workflows' actions. Being native it needs no credentials, and it may
+# write under .github/workflows/, which the Actions token may not.
+#
+# What lives inside an ARG (GE-Proton, DepotDownloader) is invisible to it;
+# Renovate handles those with custom managers (renovate.json5).
 version: 2
 updates:
   - package-ecosystem: github-actions
