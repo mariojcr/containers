@@ -7,8 +7,8 @@ FROM debian:13-slim
 # here and the workflow reads the image tag from it. The checksum is the one
 # GloriousEggroll publishes next to the tarball, written by scripts/pin-proton.sh
 # when the version moves.
-ARG PROTON_VERSION=11-11
-ARG PROTON_SHA512=45721a7b625b2404d8896bb5e2a8b87fc9623a394873a6dd6b900c839681d5c01ec694ca00d003fc9c733c5f6c5648af8171985656f9fa47e20999fbebdbe235
+ARG PROTON_VERSION=11-12
+ARG PROTON_SHA512=2e37447902529c9fc39138dc0b3f24aed3513b59a190b825e6b4a668e49e2033bdf6b8a7998e8686e067bbb3f61f3a6633e2408f0cc96f6dad983bd18e2db31e
 
 # DepotDownloader (SteamRE) installs and updates the game. It replaces
 # steamcmd, which could report success without updating, needed the installed
